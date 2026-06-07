@@ -26,8 +26,8 @@ h1{
 }
 
 button{
-    font-size:28px;
-    padding:20px 40px;
+    font-size:24px;
+    padding:15px 30px;
     margin:10px;
     border:none;
     border-radius:15px;
@@ -46,6 +46,31 @@ button{
     color:#aaa;
     margin-top:20px;
 }
+
+#nicknameDisplay{
+    color:#7ec8ff;
+    margin-bottom:20px;
+    font-size:20px;
+}
+
+#log{
+    width:80%;
+    max-width:700px;
+    margin:30px auto;
+    text-align:left;
+}
+
+.log-item{
+    background:#2a2a2a;
+    padding:12px;
+    margin-bottom:10px;
+    border-radius:10px;
+}
+
+.log-time{
+    color:#aaa;
+    font-size:12px;
+}
 </style>
 </head>
 
@@ -53,14 +78,16 @@ button{
 
 <h1>🎮 김현규 배그 시간 계산기 🎮</h1>
 
+<div id="nicknameDisplay"></div>
+
 <div id="time">불러오는 중...</div>
 
 <button onclick="pubg()">
     김현규가 배그라고 외침
 </button>
 
-<button onclick="resetData()">
-    초기화
+<button onclick="changeNickname()">
+    닉네임 변경
 </button>
 
 <div id="shout"></div>
@@ -68,6 +95,9 @@ button{
 <div class="info">
     서버에 저장되며 모든 접속자와 공유됩니다.
 </div>
+
+<h2>📜 최근 기록</h2>
+<div id="log"></div>
 
 <script type="module">
 
@@ -78,6 +108,7 @@ import {
   getDatabase,
   ref,
   set,
+  push,
   onValue
 }
 from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
@@ -97,10 +128,29 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 const counterRef = ref(db, "pubgHours");
+const logRef = ref(db, "logs");
 
 let hours = 0;
 
-// 실시간 동기화
+// 닉네임 확인
+let nickname = localStorage.getItem("nickname");
+
+if(!nickname){
+
+    nickname = prompt("처음 방문했습니다.\n닉네임을 입력하세요.");
+
+    while(!nickname || nickname.trim() === ""){
+        nickname = prompt("닉네임을 입력하세요.");
+    }
+
+    nickname = nickname.trim();
+
+    localStorage.setItem("nickname", nickname);
+}
+
+updateNicknameDisplay();
+
+// 총 시간 실시간 동기화
 onValue(counterRef, (snapshot) => {
 
     if(snapshot.exists()){
@@ -112,6 +162,40 @@ onValue(counterRef, (snapshot) => {
     updateDisplay();
 });
 
+// 최근 기록 실시간 동기화
+onValue(logRef, (snapshot) => {
+
+    const logDiv = document.getElementById("log");
+
+    if(!snapshot.exists()){
+        logDiv.innerHTML = "기록 없음";
+        return;
+    }
+
+    const data = snapshot.val();
+    const logs = Object.values(data);
+
+    logs.sort((a,b)=>b.time-a.time);
+
+    let html = "";
+
+    logs.slice(0,20).forEach(item=>{
+
+        const date = new Date(item.time);
+
+        html += `
+        <div class="log-item">
+            <strong>${item.name}</strong> (+${item.amount.toLocaleString()}시간)
+            <div class="log-time">
+                ${date.toLocaleString()}
+            </div>
+        </div>
+        `;
+    });
+
+    logDiv.innerHTML = html;
+});
+
 // 배그 버튼
 window.pubg = async function(){
 
@@ -119,31 +203,45 @@ window.pubg = async function(){
 
     await set(counterRef, hours);
 
+    await push(logRef,{
+        name:nickname,
+        amount:50000,
+        time:Date.now()
+    });
+
     document.getElementById("shout").innerText =
-        "🔥 배그라고!!! 🔥";
+        `🔥 ${nickname}님이 배그라고 외쳤다! 🔥`;
 
     setTimeout(()=>{
         document.getElementById("shout").innerText = "";
     },1500);
 };
 
-// 초기화 버튼
-window.resetData = async function(){
+// 닉네임 변경
+window.changeNickname = function(){
 
-    if(confirm("정말 초기화하시겠습니까?")){
+    const newName = prompt("새 닉네임을 입력하세요.");
 
-        hours = 0;
-
-        await set(counterRef, 0);
-
-        document.getElementById("shout").innerText =
-            "초기화 완료";
+    if(!newName || newName.trim() === ""){
+        return;
     }
+
+    nickname = newName.trim();
+
+    localStorage.setItem("nickname", nickname);
+
+    updateNicknameDisplay();
+
+    alert("닉네임이 변경되었습니다.");
 };
+
+function updateNicknameDisplay(){
+    document.getElementById("nicknameDisplay").innerText =
+        `현재 닉네임 : ${nickname}`;
+}
 
 // 화면 갱신
 function updateDisplay(){
-
     document.getElementById("time").innerText =
         hours.toLocaleString() + " 시간";
 }
