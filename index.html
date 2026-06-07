@@ -4,83 +4,39 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>김현규 배그 시간 계산기</title>
-
 <style>
-body{
-    background:#1e1e1e;
-    color:white;
-    font-family:'맑은 고딕',sans-serif;
-    text-align:center;
-    padding-top:80px;
-}
-
-h1{
-    font-size:48px;
-}
-
-#time{
-    font-size:72px;
-    color:#00ff88;
-    margin:40px 0;
-    font-weight:bold;
-}
-
-button{
-    font-size:28px;
-    padding:20px 40px;
-    margin:10px;
-    border:none;
-    border-radius:15px;
-    cursor:pointer;
-}
-
-#shout{
-    margin-top:30px;
-    font-size:42px;
-    color:yellow;
-    font-weight:bold;
-    min-height:60px;
-}
-
-.info{
-    color:#aaa;
-    margin-top:20px;
-}
+body{background:#1e1e1e;color:white;font-family:'맑은 고딕',sans-serif;text-align:center;padding-top:80px;}
+h1{font-size:48px;}
+#time{font-size:72px;color:#00ff88;margin:40px 0;font-weight:bold;}
+button{font-size:24px;padding:15px 30px;margin:10px;border:none;border-radius:15px;cursor:pointer;}
+#shout{margin-top:30px;font-size:42px;color:yellow;font-weight:bold;min-height:60px;}
+.info{color:#aaa;margin-top:20px;}
+#nicknameDisplay{margin-top:20px;color:#7ec8ff;font-size:20px;}
+#log{width:80%;max-width:700px;margin:30px auto;text-align:left;}
+.log-item{background:#2a2a2a;padding:12px;margin-bottom:10px;border-radius:10px;}
+.log-time{color:#aaa;font-size:12px;}
 </style>
 </head>
-
 <body>
 
 <h1>🎮 김현규 배그 시간 계산기 🎮</h1>
 
+<div id="nicknameDisplay"></div>
 <div id="time">불러오는 중...</div>
 
-<button onclick="pubg()">
-    김현규가 배그라고 외침
-</button>
-
-<button onclick="resetData()">
-    초기화
-</button>
+<button onclick="pubg()">김현규가 배그라고 외침</button>
+<button onclick="changeNickname()">닉네임 변경</button>
 
 <div id="shout"></div>
 
-<div class="info">
-    서버에 저장되며 모든 접속자와 공유됩니다.
-</div>
+<div class="info">서버에 저장되며 모든 접속자와 공유됩니다.</div>
+
+<h2>📜 최근 기록</h2>
+<div id="log"></div>
 
 <script type="module">
-
-import { initializeApp }
-from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-
-import {
-  getDatabase,
-  ref,
-  set,
-  onValue
-}
-from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+import { getDatabase, ref, set, push, onValue } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD6XBtirZz_D0TZAneuxVALi9wsNIhElcM",
@@ -97,70 +53,85 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 const counterRef = ref(db, "pubgHours");
+const logRef = ref(db, "logs");
 
 let hours = 0;
 
-// 실시간 동기화
-onValue(counterRef, (snapshot) => {
-
-    if(snapshot.exists()){
-        hours = snapshot.val();
-    }else{
-        hours = 0;
+let nickname = localStorage.getItem("nickname");
+if(!nickname){
+    nickname = prompt("닉네임을 입력하세요.");
+    while(!nickname || nickname.trim()===""){
+        nickname = prompt("닉네임을 입력하세요.");
     }
+    nickname = nickname.trim();
+    localStorage.setItem("nickname", nickname);
+}
 
-    updateDisplay();
+function updateNicknameDisplay(){
+    document.getElementById("nicknameDisplay").innerText = "현재 닉네임 : " + nickname;
+}
+updateNicknameDisplay();
+
+onValue(counterRef, (snapshot)=>{
+    hours = snapshot.exists() ? snapshot.val() : 0;
+    document.getElementById("time").innerText = hours.toLocaleString() + " 시간";
 });
 
-// 배그 버튼
+onValue(logRef, (snapshot)=>{
+    const logDiv = document.getElementById("log");
+    if(!snapshot.exists()){
+        logDiv.innerHTML = "기록 없음";
+        return;
+    }
+
+    const logs = Object.values(snapshot.val()).sort((a,b)=>b.time-a.time);
+
+    logDiv.innerHTML = logs.slice(0,20).map(item=>`
+        <div class="log-item">
+            <strong>${item.name}</strong> (+${item.amount.toLocaleString()}시간)
+            <div class="log-time">${new Date(item.time).toLocaleString()}</div>
+        </div>
+    `).join("");
+});
+
 window.pubg = async function(){
-
     hours += 50000;
-
     await set(counterRef, hours);
 
-const messages = [
-    ` ${nickname}이(가) 김현규가 배그라고 외친걸 들었다!`,
-    ` ${nickname}: 뭐? 김현규, 배그라고???`,
-    ` ${nickname}: 김현규 배그 감지`,
-    ` ${nickname}: 김현규 +50,000시간 획득!`,
-    ` ${nickname}: 오늘도 김현규는 배그를 한다.`,
-    ` 김현규의 배그 시간이 증가했다!`,
-    ` ${nickname}: 김현규가 배그 버튼을 눌렀다!`,
-    ` 배그! 배그! 배그! 현규야 안지겨워? - ${nickname}`
-];
+    await push(logRef, {
+        name:nickname,
+        amount:50000,
+        time:Date.now()
+    });
 
-const randomMessage =
-    messages[Math.floor(Math.random() * messages.length)];
+    const messages = [
+        `${nickname}이(가) 김현규가 배그라고 외친 걸 들었다!`,
+        `${nickname}: 뭐? 김현규, 배그라고???`,
+        `${nickname}: 김현규 배그 감지`,
+        `${nickname}: 김현규 +50,000시간 획득!`,
+        `${nickname}: 오늘도 김현규는 배그를 한다.`,
+        `김현규의 배그 시간이 증가했다!`
+    ];
 
-document.getElementById("shout").innerText = randomMessage;
+    const randomMessage = Math.random() < 0.01
+      ? `김현규 긴급 체포!`
+      : messages[Math.floor(Math.random()*messages.length)];
+
+    document.getElementById("shout").innerText = randomMessage;
 
     setTimeout(()=>{
         document.getElementById("shout").innerText = "";
-    },1500);
+    },2000);
 };
 
-// 초기화 버튼
-window.resetData = async function(){
+window.changeNickname = function(){
+    const newName = prompt("새 닉네임을 입력하세요.");
+    if(!newName || !newName.trim()) return;
 
-    if(confirm("정말 초기화하시겠습니까?")){
-
-        hours = 0;
-
-        await set(counterRef, 0);
-
-        document.getElementById("shout").innerText =
-            "초기화 완료";
-    }
+    nickname = newName.trim();
+    localStorage.setItem("nickname", nickname);
+    updateNicknameDisplay();
 };
-
-// 화면 갱신
-function updateDisplay(){
-
-    document.getElementById("time").innerText =
-        hours.toLocaleString() + " 시간";
-}
-
 </script>
 
 </body>
