@@ -15,6 +15,57 @@ button{font-size:24px;padding:15px 30px;margin:10px;border:none;border-radius:15
 #log{width:80%;max-width:700px;margin:30px auto;text-align:left;}
 .log-item{background:#2a2a2a;padding:12px;margin-bottom:10px;border-radius:10px;}
 .log-time{color:#aaa;font-size:12px;}
+
+#patchLog{
+    width:80%;
+    max-width:700px;
+    margin:30px auto;
+    text-align:left;
+}
+
+.patch-item{
+    background:#333;
+    padding:12px;
+    margin-top:10px;
+    border-radius:10px;
+}
+
+.patch-time{
+    color:#aaa;
+    font-size:12px;
+}
+
+#patchButton{
+    position:fixed;
+    top:20px;
+    right:20px;
+
+    z-index:999;
+
+    font-size:18px;
+    padding:10px 20px;
+}
+
+#patchBox{
+    position:fixed;
+    top:70px;
+    right:20px;
+
+    width:400px;
+    max-height:600px;
+
+    overflow-y:auto;
+
+    background:#222;
+
+    border:1px solid #555;
+    border-radius:10px;
+
+    padding:15px;
+
+    z-index:998;
+}
+
 </style>
 </head>
 <body>
@@ -27,12 +78,35 @@ button{font-size:24px;padding:15px 30px;margin:10px;border:none;border-radius:15
 <button onclick="pubg()">김현규가 배그라고 외침</button>
 <button onclick="changeNickname()">닉네임 변경</button>
 
+<div id="adminPanel" style="display:none;margin:20px;">
+<h3>🔧 관리자 패널</h3>
+<input
+    type="number"
+    id="incrementInput"
+    placeholder="증가량 입력"
+    style="padding:10px;width:200px;">
+
+<button onclick="applyIncrement()">
+    증가량 적용
+</button>
+<button onclick="adminReset()">전체 초기화</button>
+</div>
+
 <div id="shout"></div>
 
 <div class="info">서버에 저장되며 모든 접속자와 공유됩니다.</div>
 
 <h2>📜 최근 기록</h2>
 <div id="log"></div>
+
+<button id="patchButton" onclick="togglePatchLog()">
+    🛠 패치내역
+</button>
+
+<div id="patchBox" style="display:none;">
+    <h2>🛠 패치내역</h2>
+    <div id="patchLog"></div>
+</div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
@@ -49,13 +123,17 @@ const firebaseConfig = {
   measurementId: "G-J24ZE8NJ2G"
 };
 
+const ADMIN_NAME = "원준식전도시락페스티벌"; // 원하는 비밀 닉네임
+
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 const counterRef = ref(db, "pubgHours");
 const logRef = ref(db, "logs");
+const patchLogRef = ref(db, "patchLogs");
 
 let hours = 0;
+let incrementAmount = 50000;
 
 let nickname = localStorage.getItem("nickname");
 if(!nickname){
@@ -68,7 +146,13 @@ if(!nickname){
 }
 
 function updateNicknameDisplay(){
-    document.getElementById("nicknameDisplay").innerText = "현재 닉네임 : " + nickname;
+    const visibleName = nickname === ADMIN_NAME ? "김현규" : nickname;
+
+    document.getElementById("nicknameDisplay").innerText =
+        "현재 닉네임 : " + visibleName;
+
+    document.getElementById("adminPanel").style.display =
+        nickname === ADMIN_NAME ? "block" : "none";
 }
 updateNicknameDisplay();
 
@@ -88,28 +172,47 @@ onValue(logRef, (snapshot)=>{
 
     logDiv.innerHTML = logs.slice(0,20).map(item=>`
         <div class="log-item">
-            <strong>${item.name}</strong> (+${item.amount.toLocaleString()}시간)
+            <strong>${item.name === ADMIN_NAME ? "김현규" : item.name}</strong> (+${item.amount.toLocaleString()}시간)
             <div class="log-time">${new Date(item.time).toLocaleString()}</div>
         </div>
     `).join("");
 });
 
+onValue(patchLogRef, (snapshot)=>{
+    const patchDiv = document.getElementById("patchLog");
+
+    if(!snapshot.exists()){
+        patchDiv.innerHTML = "패치내역 없음";
+        return;
+    }
+
+    const patches = Object.values(snapshot.val()).sort((a,b)=>b.time-a.time);
+
+    patchDiv.innerHTML = patches.slice(0,20).map(item=>`
+        <div class="patch-item">
+            <strong>${item.text}</strong>
+            <div class="patch-time">${new Date(item.time).toLocaleString()}</div>
+        </div>
+    `).join("");
+});
+
 window.pubg = async function(){
-    hours += 50000;
+    const visibleName = nickname === ADMIN_NAME ? "김현규" : nickname;
+    hours += incrementAmount;
     await set(counterRef, hours);
 
     await push(logRef, {
         name:nickname,
-        amount:50000,
+        amount:incrementAmount,
         time:Date.now()
     });
 
     const messages = [
-        `${nickname}이(가) 김현규가 배그라고 외친 걸 들었다!`,
-        `${nickname}: 뭐? 김현규, 배그라고???`,
-        `${nickname}: 김현규 배그 감지`,
-        `${nickname}: 김현규 +50,000시간 획득!`,
-        `${nickname}: 오늘도 김현규는 배그를 한다.`,
+        `${visibleName}이(가) 김현규가 배그라고 외친 걸 들었다!`,
+        `${visibleName}: 뭐? 김현규, 배그라고???`,
+        `${visibleName}: 김현규 배그 감지`,
+        `${visibleName}: 김현규 +50,000시간 획득!`,
+        `${visibleName}: 오늘도 김현규는 배그를 한다.`,
         `김현규의 배그 시간이 증가했다!`
     ];
 
@@ -132,7 +235,71 @@ window.changeNickname = function(){
     localStorage.setItem("nickname", nickname);
     updateNicknameDisplay();
 };
+
+window.setIncrement = function(amount){
+
+    if(nickname !== ADMIN_NAME) return;
+
+    incrementAmount = amount;
+
+    alert("증가량 변경: " + amount.toLocaleString());
+};
+
+window.adminReset = async function(){
+
+    if(nickname !== ADMIN_NAME) return;
+
+    if(confirm("전체 시간을 초기화할까요?")){
+
+        await set(counterRef, 0);
+
+        await push(patchLogRef, {
+            text: "관리자가 전체 시간을 초기화",
+            time: Date.now()
+        });
+
+        alert("전체 시간이 초기화되었습니다.");
+    }
+};
+
+window.applyIncrement = async function(){
+
+    if(nickname !== ADMIN_NAME) return;
+
+    const value =
+        Number(document.getElementById("incrementInput").value);
+
+    if(!value || value < 1){
+        alert("1 이상의 숫자를 입력하세요.");
+        return;
+    }
+
+    incrementAmount = value;
+
+    await push(patchLogRef, {
+        text: `관리자가 클릭당 증가량을 ${value.toLocaleString()}시간으로 변경`,
+        time: Date.now()
+    });
+
+    alert(
+        "클릭당 증가량이 " +
+        value.toLocaleString() +
+        "시간으로 변경되었습니다."
+    );
+};
+
+window.togglePatchLog = function(){
+    const patchBox = document.getElementById("patchBox");
+
+    if(patchBox.style.display === "none"){
+        patchBox.style.display = "block";
+    }else{
+        patchBox.style.display = "none";
+    }
+};
+
 </script>
 
 </body>
 </html>
+
