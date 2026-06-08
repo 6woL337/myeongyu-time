@@ -131,6 +131,7 @@ const db = getDatabase(app);
 const counterRef = ref(db, "pubgHours");
 const logRef = ref(db, "logs");
 const patchLogRef = ref(db, "patchLogs");
+const incrementRef = ref(db, "incrementAmount");
 
 let hours = 0;
 let incrementAmount = 50000;
@@ -155,6 +156,12 @@ function updateNicknameDisplay(){
         nickname === ADMIN_NAME ? "block" : "none";
 }
 updateNicknameDisplay();
+
+onValue(incrementRef, (snapshot)=>{
+    if(snapshot.exists()){
+        incrementAmount = snapshot.val();
+    }
+});
 
 onValue(counterRef, (snapshot)=>{
     hours = snapshot.exists() ? snapshot.val() : 0;
@@ -211,7 +218,7 @@ window.pubg = async function(){
         `${visibleName}이(가) 김현규가 배그라고 외친 걸 들었다!`,
         `${visibleName}: 뭐? 김현규, 배그라고???`,
         `${visibleName}: 김현규 배그 감지`,
-        `${visibleName}: 김현규 +50,000시간 획득!`,
+        `${visibleName}: 김현규 +${incrementAmount.toLocaleString()}시간 획득!`,
         `${visibleName}: 오늘도 김현규는 배그를 한다.`,
         `김현규의 배그 시간이 증가했다!`
     ];
@@ -276,6 +283,8 @@ window.applyIncrement = async function(){
 
     incrementAmount = value;
 
+    await set(incrementRef, value);
+
     await push(patchLogRef, {
         text: `관리자가 클릭당 증가량을 ${value.toLocaleString()}시간으로 변경`,
         time: Date.now()
@@ -302,4 +311,6 @@ window.togglePatchLog = function(){
 
 </body>
 </html>
+
+
 
